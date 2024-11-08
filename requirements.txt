@@ -9,3 +9,5 @@ Pillow>=8.2.0
 albumentations>=0.5.2
 mlflow>=1.19.0
 jupyterlab>=3.0.14
+sweetviz>=2.1.0
+staintools>=0.3.2
