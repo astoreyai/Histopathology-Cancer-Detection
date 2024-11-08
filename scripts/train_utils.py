@@ -1,30 +1,15 @@
 # scripts/train_utils.py
 
 import torch
-import torch.optim as optim
-import torch.nn as nn
+import numpy as np
 from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
 
-def get_optimizer(model, learning_rate=0.001):
-    """
-    Initialize the Adam optimizer.
-    """
-    return optim.Adam(model.parameters(), lr=learning_rate)
-
-def get_loss_function():
-    """
-    Define the Binary Cross-Entropy loss function for binary classification.
-    """
-    return nn.BCELoss()
-
-def train_one_epoch(model, loader, optimizer, criterion, device="cpu"):
-    """
-    Train the model for one epoch.
-    """
+def train_one_epoch(model, loader, optimizer, criterion, device):
+    """Train the model for one epoch."""
     model.train()
     running_loss = 0
-    for images, labels in tqdm(loader, desc="Training"):
+    for images, labels in loader:
         images, labels = images.to(device), labels.float().to(device)
         optimizer.zero_grad()
         outputs = model(images).squeeze()
@@ -34,16 +19,14 @@ def train_one_epoch(model, loader, optimizer, criterion, device="cpu"):
         running_loss += loss.item()
     return running_loss / len(loader)
 
-def validate(model, loader, criterion, device="cpu"):
-    """
-    Validate the model and calculate loss and AUC score.
-    """
+def validate(model, loader, criterion, device):
+    """Validate the model."""
     model.eval()
     running_loss = 0
     all_labels = []
     all_outputs = []
     with torch.no_grad():
-        for images, labels in tqdm(loader, desc="Validating"):
+        for images, labels in loader:
             images, labels = images.to(device), labels.float().to(device)
             outputs = model(images).squeeze()
             loss = criterion(outputs, labels)
@@ -53,11 +36,16 @@ def validate(model, loader, criterion, device="cpu"):
     auc_score = roc_auc_score(all_labels, all_outputs)
     return running_loss / len(loader), auc_score
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, epochs=5, device="cpu"):
-    """
-    Train and validate the model over a specified number of epochs.
-    """
-    for epoch in range(epochs):
-        train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
-        val_loss, val_auc = validate(model, val_loader, criterion, device)
-        print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Val AUC: {val_auc:.4f}")
+def generate_predictions(model, loader, device, threshold=0.5):
+    """Generate predictions on the test dataset."""
+    model.eval()
+    predictions = []
+    img_ids = []
+    with torch.no_grad():
+        for images, ids in tqdm(loader):
+            images = images.to(device)
+            outputs = model(images).squeeze()
+            preds = (outputs > threshold).float().cpu().numpy()
+            predictions.extend(preds)
+            img_ids.extend(ids)
+    return img_ids, predictions

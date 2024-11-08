@@ -1,58 +1,36 @@
-# scripts/data_utils.py
-
+# data_utils.py
 import os
-from torch.utils.data import Dataset
-from torchvision import transforms
-from PIL import Image
+import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+import seaborn as sns
+from PIL import Image
+from configs import TRAIN_DIR, EDA_SAMPLE_SIZE
 
-class HistologyDataset(Dataset):
-    """
-    Custom dataset class for histopathology images.
-    """
-    def __init__(self, dataframe, img_dir, transform=None):
-        self.dataframe = dataframe
-        self.img_dir = img_dir
-        self.transform = transform
+def load_labels():
+    """Load labels dataframe from the path specified in configs."""
+    return pd.read_csv(LABELS_FILE)
 
-    def __len__(self):
-        return len(self.dataframe)
+def display_sample_images(df, img_dir, label, sample_size=5):
+    """Display a sample of images for a given label."""
+    sample_df = df[df['label'] == label].sample(sample_size, random_state=42)
+    fig, axes = plt.subplots(1, sample_size, figsize=(15, 5))
+    for i, row in enumerate(sample_df.iterrows()):
+        img_id = row[1]['id']
+        img_path = os.path.join(img_dir, img_id + '.tif')
+        img = Image.open(img_path)
+        axes[i].imshow(img)
+        axes[i].axis("off")
+    title = "Cancerous" if label == 1 else "Non-Cancerous"
+    plt.suptitle(f"{sample_size} Sample {title} Images")
+    plt.show()
 
-    def __getitem__(self, idx):
-        img_name = os.path.join(self.img_dir, self.dataframe.iloc[idx, 0] + '.tif')
-        image = Image.open(img_name).convert("RGB")
-        label = self.dataframe.iloc[idx, 1]
-
-        if self.transform:
-            image = self.transform(image)
-
-        return image, label
-
-def get_transforms(phase='train'):
-    """
-    Define data augmentation and preprocessing transforms.
-    """
-    if phase == 'train':
-        return transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(20),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-    else:
-        return transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-
-def load_data(labels_file, train_dir, test_size=0.2, random_state=42):
-    """
-    Load data and split into training and validation sets.
-    """
-    labels_df = pd.read_csv(labels_file)
-    train_df, val_df = train_test_split(labels_df, test_size=test_size, stratify=labels_df['label'], random_state=random_state)
-    return train_df, val_df
+def calculate_mean_intensity(df, img_dir, label, sample_size=EDA_SAMPLE_SIZE):
+    """Calculate pixel intensity distribution for a subset of images."""
+    sample_df = df[df['label'] == label].sample(sample_size, random_state=42)
+    intensities = []
+    for img_id in sample_df['id']:
+        img_path = os.path.join(img_dir, img_id + '.tif')
+        img = Image.open(img_path).convert('L')  # Convert to grayscale
+        intensities.extend(np.array(img).flatten())
+    return intensities
