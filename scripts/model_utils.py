@@ -2,38 +2,57 @@
 
 import torch
 import torch.nn as nn
-import os
+import torch.nn.functional as F
 
 class BaselineCNN(nn.Module):
     """
-    Baseline CNN model for binary classification tasks.
-
-    Args:
-        input_shape (tuple): The shape of the input images as (channels, height, width).
-        num_classes (int): The number of output classes. Defaults to 1 for binary classification.
+    Baseline CNN model for binary classification with input images of size 96x96.
+    Allows customization of key layer parameters using kwargs.
     """
-    def __init__(self, input_shape=(3, 224, 224), num_classes=1, **kwargs):
+    def __init__(self, input_shape=(3, 96, 96), num_classes=1, **kwargs):
+        """
+        Initializes the CNN model.
+
+        Args:
+            input_shape (tuple): Shape of the input image, default is (3, 96, 96).
+            num_classes (int): Number of output classes, default is 1 for binary classification.
+            **kwargs: Additional keyword arguments for layers.
+                - kernel_size_conv (int or tuple): Kernel size for conv layers, default is 3.
+                - stride_conv (int): Stride for conv layers, default is 1.
+                - padding_conv (int): Padding for conv layers, default is 1.
+                - kernel_size_pool (int): Kernel size for pooling layers, default is 2.
+                - stride_pool (int): Stride for pooling layers, default is 2.
+                - dropout_rate (float): Dropout rate for the dropout layer, default is 0.5.
+        """
         super(BaselineCNN, self).__init__()
-        # Convolutional layers for feature extraction
+        
+        # Retrieve kwargs for convolutional and pooling layers
+        kernel_size_conv = kwargs.get('kernel_size_conv', 3)
+        stride_conv = kwargs.get('stride_conv', 1)
+        padding_conv = kwargs.get('padding_conv', 1)
+        kernel_size_pool = kwargs.get('kernel_size_pool', 2)
+        stride_pool = kwargs.get('stride_pool', 2)
+        dropout_rate = kwargs.get('dropout_rate', 0.5)
+
+        # Convolutional layers
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(in_channels=input_shape[0], out_channels=32, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(3, 32, kernel_size=kernel_size_conv, stride=stride_conv, padding=padding_conv),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.MaxPool2d(kernel_size=kernel_size_pool, stride=stride_pool),  # Output: (32, 48, 48)
+            nn.Conv2d(32, 64, kernel_size=kernel_size_conv, stride=stride_conv, padding=padding_conv),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.MaxPool2d(kernel_size=kernel_size_pool, stride=stride_pool),  # Output: (64, 24, 24)
+            nn.Conv2d(64, 128, kernel_size=kernel_size_conv, stride=stride_conv, padding=padding_conv),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=kernel_size_pool, stride=stride_pool)  # Output: (128, 12, 12)
         )
         
-        # Fully connected layers for classification
-        conv_output_size = 128 * (input_shape[1] // 8) * (input_shape[2] // 8)
+        # Fully connected layers
         self.fc_layers = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(conv_output_size, 128),
+            nn.Linear(128 * 12 * 12, 128),  # Adjusted based on input shape
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(dropout_rate),
             nn.Linear(128, num_classes),
             nn.Sigmoid()
         )
@@ -44,7 +63,7 @@ class BaselineCNN(nn.Module):
         
         Args:
             x (torch.Tensor): Input tensor.
-        
+
         Returns:
             torch.Tensor: Output predictions.
         """
