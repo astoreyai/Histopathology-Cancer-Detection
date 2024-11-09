@@ -125,16 +125,3 @@ def display_sample_images(df, img_dir, label, sample_size=5):
     title = "Cancerous" if label == 1 else "Non-Cancerous"
     plt.suptitle(f"{sample_size} Sample {title} Images")
     plt.show()
-
-def calculate_mean_intensity(img_path):
-    """
-    Calculate the mean pixel intensity for a single image.
-
-    Parameters:
-        img_path (str): Path to the image file.
-
-    Returns:
-        float: Mean intensity of the image.
-    """
-    img = Image.open(img_path).convert('L')  # Convert to grayscale
-    return np.array(img).mean()
