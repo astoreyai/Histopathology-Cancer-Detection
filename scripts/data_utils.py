@@ -1,11 +1,13 @@
 # data_utils.py
 
 import os
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
+
 
 # Function to load labels CSV file
 def load_labels(labels_file_path):
@@ -17,8 +19,14 @@ def load_labels(labels_file_path):
         
     Returns:
         pd.DataFrame: DataFrame containing the labels data.
+        
+    Raises:
+        FileNotFoundError: If the CSV file is not found.
     """
+    if not os.path.exists(labels_file_path):
+        raise FileNotFoundError(f"Labels file {labels_file_path} not found.")
     return pd.read_csv(labels_file_path)
+
 
 # Class for the Histology Dataset (Training/Validation)
 class HistologyDataset(Dataset):
@@ -26,14 +34,32 @@ class HistologyDataset(Dataset):
     Custom Dataset class for loading histopathology images for training and validation.
     """
     def __init__(self, dataframe, img_dir, transform=None):
+        """
+        Initialize the dataset.
+        
+        Args:
+            dataframe (pd.DataFrame): DataFrame with 'id' and 'label' columns.
+            img_dir (str): Path to the image directory.
+            transform (callable, optional): Optional transformations to be applied on an image.
+        """
         self.dataframe = dataframe
         self.img_dir = img_dir
         self.transform = transform
 
     def __len__(self):
+        """Return the length of the dataset."""
         return len(self.dataframe)
 
     def __getitem__(self, idx):
+        """
+        Retrieve an image and its label by index.
+        
+        Args:
+            idx (int): Index of the data item.
+        
+        Returns:
+            Tuple[Image, int]: Transformed image and corresponding label.
+        """
         img_name = os.path.join(self.img_dir, self.dataframe.iloc[idx, 0] + '.tif')
         image = Image.open(img_name).convert("RGB")
         label = self.dataframe.iloc[idx, 1]
@@ -43,21 +69,39 @@ class HistologyDataset(Dataset):
 
         return image, label
 
+
 # Class for the Histology Test Dataset (Testing)
 class HistologyTestDataset(Dataset):
     """
     Custom Dataset class for loading histopathology images for testing.
     """
     def __init__(self, img_dir, transform=None):
+        """
+        Initialize the dataset.
+        
+        Args:
+            img_dir (str): Path to the image directory.
+            transform (callable, optional): Optional transformations to be applied on an image.
+        """
         self.img_dir = img_dir
         self.transform = transform
         # Image IDs are derived from filenames
         self.img_ids = [img_id.split(".")[0] for img_id in os.listdir(img_dir) if img_id.endswith(".tif")]
 
     def __len__(self):
+        """Return the length of the dataset."""
         return len(self.img_ids)
 
     def __getitem__(self, idx):
+        """
+        Retrieve an image by index.
+        
+        Args:
+            idx (int): Index of the data item.
+        
+        Returns:
+            Tuple[Image, str]: Transformed image and image ID.
+        """
         img_id = self.img_ids[idx]
         img_path = os.path.join(self.img_dir, img_id + ".tif")
         image = Image.open(img_path).convert("RGB")
@@ -66,6 +110,7 @@ class HistologyTestDataset(Dataset):
             image = self.transform(image)
 
         return image, img_id
+
 
 # Define common transformations for training and validation
 def get_transformations(target_size=(224, 224), is_train=True):
@@ -94,21 +139,21 @@ def get_transformations(target_size=(224, 224), is_train=True):
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-    
+
+
 def display_sample_images(df, img_dir, label, sample_size=5):
     """
     Display a sample of images for a specified label.
 
     Parameters:
-    - df (DataFrame): DataFrame containing 'id' and 'label' columns.
-    - img_dir (str): Directory path where the images are stored.
-    - label (int): Class label (1 for cancerous, 0 for non-cancerous).
-    - sample_size (int, optional): Number of images to display. Default is 5.
+        df (DataFrame): DataFrame containing 'id' and 'label' columns.
+        img_dir (str): Directory path where the images are stored.
+        label (int): Class label (1 for cancerous, 0 for non-cancerous).
+        sample_size (int, optional): Number of images to display. Default is 5.
 
     Raises:
-    - ValueError: If label is not found in the DataFrame.
-    - FileNotFoundError: If image files are missing in the specified directory.
-
+        ValueError: If label is not found in the DataFrame.
+        FileNotFoundError: If image files are missing in the specified directory.
     """
     if label not in df['label'].unique():
         raise ValueError(f"Label {label} not found in DataFrame.")
@@ -130,6 +175,7 @@ def display_sample_images(df, img_dir, label, sample_size=5):
     plt.suptitle(f"{sample_size} Sample {title} Images")
     plt.show()
 
+
 def calculate_mean_intensity(df, img_dir, label, sample_size=10, **kwargs):
     """
     Calculate pixel intensity distribution for a subset of images with a specified label.
@@ -145,6 +191,9 @@ def calculate_mean_intensity(df, img_dir, label, sample_size=10, **kwargs):
         list: Flattened list of intensities for sampled images.
     """
     # Filter and sample the DataFrame for the specified label
+    if label not in df['label'].unique():
+        raise ValueError(f"Label {label} not found in DataFrame.")
+
     sample_df = df[df['label'] == label].sample(sample_size, random_state=42)
     
     intensities = []
