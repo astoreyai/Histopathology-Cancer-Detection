@@ -2,7 +2,6 @@
 
 import os
 import pandas as pd
-import torch
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 from torchvision import transforms
@@ -96,36 +95,37 @@ def get_transformations(target_size=(224, 224), is_train=True):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
     
-def display_sample_images(df, img_dir, label, sample_size=5, **kwargs):
+def display_sample_images(df, img_dir, label, sample_size=5):
     """
-    Display a sample of images for a specified label from the dataset.
+    Display a sample of images for a specified label.
 
     Parameters:
-        df (pd.DataFrame): DataFrame containing image IDs and labels.
-        img_dir (str): Directory where images are stored.
-        label (int): Label to filter images (1 for cancerous, 0 for non-cancerous).
-        sample_size (int): Number of images to sample and display.
-        **kwargs: Additional keyword arguments for plt.subplots.
+    - df (DataFrame): DataFrame containing 'id' and 'label' columns.
+    - img_dir (str): Directory path where the images are stored.
+    - label (int): Class label (1 for cancerous, 0 for non-cancerous).
+    - sample_size (int, optional): Number of images to display. Default is 5.
 
-    Returns:
-        None
+    Raises:
+    - ValueError: If label is not found in the DataFrame.
+    - FileNotFoundError: If image files are missing in the specified directory.
+
     """
-    # Filter and sample the DataFrame for the specified label
+    if label not in df['label'].unique():
+        raise ValueError(f"Label {label} not found in DataFrame.")
+
     sample_df = df[df['label'] == label].sample(sample_size, random_state=42)
-    
-    # Set up the figure with specified sample size and subplots kwargs
-    fig, axes = plt.subplots(1, sample_size, figsize=(15, 5), **kwargs)
-    
+    fig, axes = plt.subplots(1, sample_size, figsize=(15, 5))
+
     for i, (_, row) in enumerate(sample_df.iterrows()):
         img_id = row['id']
-        img_path = os.path.join(img_dir, f"{img_id}.tif")
-        img = Image.open(img_path)
+        img_path = os.path.join(img_dir, img_id + '.tif')
+        if not os.path.exists(img_path):
+            raise FileNotFoundError(f"Image file {img_path} not found.")
         
-        # Display the image
+        img = Image.open(img_path)
         axes[i].imshow(img)
         axes[i].axis("off")
-    
-    # Set title based on label type
+
     title = "Cancerous" if label == 1 else "Non-Cancerous"
     plt.suptitle(f"{sample_size} Sample {title} Images")
     plt.show()
