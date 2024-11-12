@@ -85,19 +85,19 @@ class BaselineCNN(pl.LightningModule):
         preds = (outputs > 0.5).float()
         return ids, preds
 
-    def generate_predictions(self, dataloader, output_path="submission.csv"):
+    def generate_predictions(model, dataloader, output_path="submission.csv"):
         """
         Generates predictions on a test DataLoader and saves them in CSV format for Kaggle submission.
         """
-        self.eval()
+        model.eval()
         predictions = []
         
         # Ensure model and data are on the right device
-        device = next(self.parameters()).device
+        device = next(model.parameters()).device
         with torch.no_grad():
             for images, ids in dataloader:
                 images = images.to(device)
-                outputs = self(images).squeeze()
+                outputs = model(images).squeeze()
                 preds = (outputs > 0.5).float()  # Binary classification threshold
                 predictions.extend(zip(ids, preds.cpu().numpy().astype(int)))
 
