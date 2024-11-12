@@ -1,28 +1,15 @@
-# data_utils.py
-
 import os
-import pandas as pd
-import numpy as np
 from PIL import Image
-import matplotlib.pyplot as plt
-from torch.utils.data import Dataset
+import pandas as pd
+from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-
-def load_labels(labels_file_path):
-    """
-    Load the labels from a CSV file.
-    
-    Args:
-        labels_file_path (str): Path to the labels CSV file.
-        
-    Returns:
-        pd.DataFrame: DataFrame containing the labels data.
-    """
-    return pd.read_csv(labels_file_path)
+from pytorch_lightning import LightningDataModule
+from sklearn.model_selection import train_test_split
+from scripts.config import TRAIN_DIR, LABELS_FILE, TARGET_SIZE, BATCH_SIZE
 
 class HistologyDataset(Dataset):
     """
-    Custom Dataset class for loading histopathology images for training and validation.
+    Custom Dataset for loading histopathology images.
     """
     def __init__(self, dataframe, img_dir, transform=None):
         self.dataframe = dataframe
@@ -34,94 +21,65 @@ class HistologyDataset(Dataset):
 
     def __getitem__(self, idx):
         img_name = os.path.join(self.img_dir, self.dataframe.iloc[idx, 0] + '.tif')
-        image = Image.open(img_name).convert("RGB")
+        try:
+            image = Image.open(img_name).convert("RGB")
+        except FileNotFoundError:
+            print(f"Image {img_name} not found.")
+            return None, None
         label = self.dataframe.iloc[idx, 1]
-
         if self.transform:
             image = self.transform(image)
-
         return image, label
 
-class HistologyTestDataset(Dataset):
+class HistopathologyDataModule(LightningDataModule):
     """
-    Custom Dataset class for loading histopathology images for testing.
+    Lightning DataModule to manage data loading for training, validation, and testing.
     """
-    def __init__(self, img_dir, transform=None):
+    def __init__(self, img_dir=TRAIN_DIR, labels_file=LABELS_FILE, batch_size=BATCH_SIZE, target_size=TARGET_SIZE):
+        super().__init__()
         self.img_dir = img_dir
-        self.transform = transform
-        self.img_ids = [img_id.split(".")[0] for img_id in os.listdir(img_dir) if img_id.endswith(".tif")]
+        self.labels_file = labels_file
+        self.batch_size = batch_size
+        self.target_size = target_size
 
-    def __len__(self):
-        return len(self.img_ids)
-
-    def __getitem__(self, idx):
-        img_id = self.img_ids[idx]
-        img_path = os.path.join(self.img_dir, img_id + ".tif")
-        image = Image.open(img_path).convert("RGB")
-
-        if self.transform:
-            image = self.transform(image)
-
-        return image, img_id
-
-def get_transformations(target_size=(224, 224), is_train=True):
-    """
-    Get image transformations for training or validation data.
-    
-    Args:
-        target_size (tuple): The desired target image size.
-        is_train (bool): If True, returns transformations with augmentations; else, returns simple transformations.
-
-    Returns:
-        torchvision.transforms.Compose: Transformations for the dataset.
-    """
-    if is_train:
-        return transforms.Compose([
-            transforms.Resize(target_size),
+        # Define transformations
+        self.train_transform = transforms.Compose([
+            transforms.Resize(self.target_size),
             transforms.RandomHorizontalFlip(),
             transforms.RandomRotation(20),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2),
+            transforms.ColorJitter(0.2, 0.2),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
-    else:
-        return transforms.Compose([
-            transforms.Resize(target_size),
+        self.val_transform = transforms.Compose([
+            transforms.Resize(self.target_size),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        self.test_transform = transforms.Compose([
+            transforms.Resize(self.target_size),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
-def display_sample_images(df, img_dir, label, sample_size=5):
-    """
-    Display a sample of images for a specified label.
-
-    Parameters:
-    - df (DataFrame): DataFrame containing 'id' and 'label' columns.
-    - img_dir (str): Directory path where the images are stored.
-    - label (int): Class label (1 for cancerous, 0 for non-cancerous).
-    - sample_size (int, optional): Number of images to display. Default is 5.
-
-    Raises:
-    - ValueError: If label is not found in the DataFrame.
-    - FileNotFoundError: If image files are missing in the specified directory.
-
-    """
-    if label not in df['label'].unique():
-        raise ValueError(f"Label {label} not found in DataFrame.")
-
-    sample_df = df[df['label'] == label].sample(sample_size, random_state=42)
-    fig, axes = plt.subplots(1, sample_size, figsize=(15, 5))
-
-    for i, (_, row) in enumerate(sample_df.iterrows()):
-        img_id = row['id']
-        img_path = os.path.join(img_dir, img_id + '.tif')
-        if not os.path.exists(img_path):
-            raise FileNotFoundError(f"Image file {img_path} not found.")
+    def setup(self, stage=None):
+        labels_df = pd.read_csv(self.labels_file)
+        train_df, val_df = train_test_split(labels_df, test_size=0.2, stratify=labels_df['label'], random_state=42)
+        self.train_dataset = HistologyDataset(train_df, self.img_dir, transform=self.train_transform)
+        self.val_dataset = HistologyDataset(val_df, self.img_dir, transform=self.val_transform)
         
-        img = Image.open(img_path)
-        axes[i].imshow(img)
-        axes[i].axis("off")
+        # Load test data if stage is "test"
+        if stage == "test":
+            self.test_dataset = HistologyDataset(labels_df, self.img_dir, transform=self.test_transform)
 
-    title = "Cancerous" if label == 1 else "Non-Cancerous"
-    plt.suptitle(f"{sample_size} Sample {title} Images")
-    plt.show()
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=4)
+
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4)
+
+    def test_dataloader(self):
+        if hasattr(self, 'test_dataset'):
+            return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4)
+        else:
+            print("Test dataset not initialized. Call setup('test') before requesting test_dataloader.")
