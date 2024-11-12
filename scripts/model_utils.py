@@ -2,21 +2,15 @@ import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 from sklearn.metrics import roc_auc_score
-from pytorch_lightning import LightningModule
 import pandas as pd
 
-class BaselineCNN(LightningModule):
+class BaselineCNN(pl.LightningModule):
     """
     Baseline CNN model for binary classification in histopathology cancer detection.
-
-    Args:
-        input_shape (tuple): Shape of input images, typically (3, height, width).
-        num_classes (int): Number of output classes.
-        learning_rate (float): Learning rate for the optimizer.
     """
     def __init__(self, input_shape=(3, 96, 96), num_classes=1, learning_rate=1e-3):
         super(BaselineCNN, self).__init__()
-        self.save_hyperparameters()  # Save hyperparameters for model reloading
+        self.save_hyperparameters()
         self.learning_rate = learning_rate
         self.num_classes = num_classes
 
@@ -33,7 +27,6 @@ class BaselineCNN(LightningModule):
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
 
-        # Define fully connected layers
         fc_input_size = 128 * (input_shape[1] // 8) * (input_shape[2] // 8)
         self.fc_layers = nn.Sequential(
             nn.Flatten(),
@@ -48,17 +41,11 @@ class BaselineCNN(LightningModule):
         self.criterion = nn.BCELoss()
 
     def forward(self, x):
-        """
-        Forward pass for the model.
-        """
         x = self.conv_layers(x)
         x = self.fc_layers(x)
         return x
 
     def training_step(self, batch, batch_idx):
-        """
-        Training step that calculates loss and logs it.
-        """
         images, labels = batch
         outputs = self(images).squeeze()
         loss = self.criterion(outputs, labels.float())
@@ -66,65 +53,54 @@ class BaselineCNN(LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        """
-        Validation step to calculate loss and AUC score, logging both metrics.
-        """
         images, labels = batch
         outputs = self(images).squeeze()
         loss = self.criterion(outputs, labels.float())
-        
-        # Calculate AUC score
         try:
             auc_score = roc_auc_score(labels.cpu().numpy(), outputs.cpu().numpy())
         except ValueError:
-            auc_score = 0  # Handle cases with a single class in batch
-        
+            auc_score = 0
         self.log("val_loss", loss, prog_bar=True)
         self.log("val_auc", auc_score, prog_bar=True)
         return {"val_loss": loss, "val_auc": auc_score}
 
     def test_step(self, batch, batch_idx):
-        """
-        Test step to calculate AUC score for evaluation on test data.
-        """
         images, labels = batch
         outputs = self(images).squeeze()
-        auc_score = roc_auc_score(labels.cpu().numpy(), outputs.cpu().numpy())
+        try:
+            auc_score = roc_auc_score(labels.cpu().numpy(), outputs.cpu().numpy())
+        except ValueError:
+            auc_score = 0
         self.log("test_auc", auc_score)
         return {"test_auc": auc_score}
 
     def configure_optimizers(self):
-        """
-        Sets up the optimizer.
-        """
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        return optimizer
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=2, factor=0.5)
+        return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
 
     def predict_step(self, batch, batch_idx):
-        """
-        Inference step to generate predictions for Kaggle submission.
-        """
         images, ids = batch
         outputs = self(images).squeeze()
-        preds = (outputs > 0.5).float()  # Threshold for binary classification
+        preds = (outputs > 0.5).float()
         return ids, preds
 
-    def save_for_submission(self, dataloader, output_path="submission.csv"):
+    def generate_predictions(self, dataloader, output_path="submission.csv"):
         """
-        Generates predictions on a dataloader and saves them in CSV format for Kaggle submission.
-
-        Args:
-            dataloader (DataLoader): DataLoader for test data.
-            output_path (str): Path to save the CSV output for submission.
+        Generates predictions on a test DataLoader and saves them in CSV format for Kaggle submission.
         """
         self.eval()
         predictions = []
+        
+        # Ensure model and data are on the right device
+        device = next(self.parameters()).device
+        with torch.no_grad():
+            for images, ids in dataloader:
+                images = images.to(device)
+                outputs = self(images).squeeze()
+                preds = (outputs > 0.5).float()  # Binary classification threshold
+                predictions.extend(zip(ids, preds.cpu().numpy().astype(int)))
 
-        for batch in dataloader:
-            ids, preds = self.predict_step(batch, None)
-            predictions.extend(zip(ids, preds.cpu().numpy().astype(int)))
-
-        # Convert to DataFrame and save
         submission_df = pd.DataFrame(predictions, columns=["id", "label"])
         submission_df.to_csv(output_path, index=False)
         print(f"Submission saved to {output_path}")

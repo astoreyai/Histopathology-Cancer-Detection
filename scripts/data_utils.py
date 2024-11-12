@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from pytorch_lightning import LightningDataModule
 from sklearn.model_selection import train_test_split
-from scripts.config import TRAIN_DIR, LABELS_FILE, TARGET_SIZE, BATCH_SIZE
+from scripts.config import TRAIN_DIR, TEST_DIR, LABELS_FILE, TARGET_SIZE, BATCH_SIZE
 
 class HistologyDataset(Dataset):
     """
@@ -24,9 +24,9 @@ class HistologyDataset(Dataset):
         try:
             image = Image.open(img_name).convert("RGB")
         except FileNotFoundError:
-            print(f"Image {img_name} not found.")
-            return None, None
-        label = self.dataframe.iloc[idx, 1]
+            print(f"Warning: Image {img_name} not found. Skipping.")
+            return None  # Return None to allow for skipping in the DataLoader collate function
+        label = self.dataframe.iloc[idx, 1] if len(self.dataframe.columns) > 1 else -1  # -1 for test data
         if self.transform:
             image = self.transform(image)
         return image, label
@@ -35,10 +35,11 @@ class HistopathologyDataModule(LightningDataModule):
     """
     Lightning DataModule to manage data loading for training, validation, and testing.
     """
-    def __init__(self, img_dir=TRAIN_DIR, labels_file=LABELS_FILE, batch_size=BATCH_SIZE, target_size=TARGET_SIZE):
+    def __init__(self, img_dir=TRAIN_DIR, labels_file=LABELS_FILE, test_dir=TEST_DIR, batch_size=BATCH_SIZE, target_size=TARGET_SIZE):
         super().__init__()
         self.img_dir = img_dir
         self.labels_file = labels_file
+        self.test_dir = test_dir
         self.batch_size = batch_size
         self.target_size = target_size
 
@@ -46,6 +47,7 @@ class HistopathologyDataModule(LightningDataModule):
         self.train_transform = transforms.Compose([
             transforms.Resize(self.target_size),
             transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
             transforms.RandomRotation(20),
             transforms.ColorJitter(0.2, 0.2),
             transforms.ToTensor(),
@@ -68,18 +70,19 @@ class HistopathologyDataModule(LightningDataModule):
         self.train_dataset = HistologyDataset(train_df, self.img_dir, transform=self.train_transform)
         self.val_dataset = HistologyDataset(val_df, self.img_dir, transform=self.val_transform)
         
-        # Load test data if stage is "test"
+        # Initialize the test dataset if stage is "test"
         if stage == "test":
-            self.test_dataset = HistologyDataset(labels_df, self.img_dir, transform=self.test_transform)
+            test_df = pd.DataFrame({"id": os.listdir(self.test_dir)})
+            self.test_dataset = HistologyDataset(test_df, self.test_dir, transform=self.test_transform)
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=4)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4)
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     def test_dataloader(self):
         if hasattr(self, 'test_dataset'):
-            return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4)
+            return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True)
         else:
             print("Test dataset not initialized. Call setup('test') before requesting test_dataloader.")
