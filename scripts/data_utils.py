@@ -1,41 +1,70 @@
 import os
-from PIL import Image
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-from pytorch_lightning import LightningDataModule
 from sklearn.model_selection import train_test_split
-from scripts.config import TRAIN_DIR, TEST_DIR, LABELS_FILE, TARGET_SIZE, BATCH_SIZE
+from torch.utils.data import DataLoader, Dataset
+from PIL import Image
+import matplotlib.pyplot as plt
+from pytorch_lightning import LightningDataModule
+from scripts.preprocessing import Preprocessing
+from scripts.config import TRAIN_DIR, TEST_DIR, LABELS_FILE, BATCH_SIZE, TARGET_SIZE
+
 
 class HistologyDataset(Dataset):
     """
-    Custom Dataset for loading histopathology images.
+    Custom dataset class for histopathology images, supporting stain normalization,
+    center masking, and dynamic transforms.
     """
-    def __init__(self, dataframe, img_dir, transform=None):
+
+    def __init__(self, dataframe, img_dir, preprocess_pipeline, mode: str):
+        """
+        Args:
+            dataframe (pd.DataFrame): DataFrame containing image IDs and labels.
+            img_dir (str): Directory containing images.
+            preprocess_pipeline (Preprocessing): Preprocessing pipeline object.
+            mode (str): Mode for preprocessing ('train', 'val', 'test').
+        """
         self.dataframe = dataframe
         self.img_dir = img_dir
-        self.transform = transform
+        self.preprocessor = preprocess_pipeline
+        self.mode = mode
 
     def __len__(self):
         return len(self.dataframe)
 
     def __getitem__(self, idx):
-        img_name = os.path.join(self.img_dir, self.dataframe.iloc[idx, 0] + '.tif')
-        try:
-            image = Image.open(img_name).convert("RGB")
-        except FileNotFoundError:
-            print(f"Warning: Image {img_name} not found. Skipping.")
-            return None  # Return None to allow for skipping in the DataLoader collate function
-        label = self.dataframe.iloc[idx, 1] if len(self.dataframe.columns) > 1 else -1  # -1 for test data
-        if self.transform:
-            image = self.transform(image)
-        return image, label
+        row = self.dataframe.iloc[idx]
+        img_path = os.path.join(self.img_dir, row["id"] + ".tif")
+        label = row.get("label", -1)  # Default -1 for unlabeled test data
+
+        # Load image and apply preprocessing
+        img = Image.open(img_path)
+        preprocessed_img = self.preprocessor.preprocess_image(img, mode=self.mode)
+
+        return img, preprocessed_img, label
+
 
 class HistopathologyDataModule(LightningDataModule):
     """
-    Lightning DataModule to manage data loading for training, validation, and testing.
+    PyTorch Lightning DataModule for managing train, validation, and test datasets
+    with dynamic preprocessing, stain normalization, and transforms.
     """
-    def __init__(self, img_dir=TRAIN_DIR, labels_file=LABELS_FILE, test_dir=TEST_DIR, batch_size=BATCH_SIZE, target_size=TARGET_SIZE):
+
+    def __init__(
+        self,
+        img_dir=TRAIN_DIR,
+        labels_file=LABELS_FILE,
+        test_dir=TEST_DIR,
+        batch_size=BATCH_SIZE,
+        target_size=TARGET_SIZE,
+    ):
+        """
+        Args:
+            img_dir (str): Directory containing training/validation images.
+            labels_file (str): Path to the CSV file with image IDs and labels.
+            test_dir (str): Directory containing test images.
+            batch_size (int): Batch size for dataloaders.
+            target_size (Tuple[int, int]): Target size for resizing images.
+        """
         super().__init__()
         self.img_dir = img_dir
         self.labels_file = labels_file
@@ -43,46 +72,100 @@ class HistopathologyDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.target_size = target_size
 
-        # Define transformations
-        self.train_transform = transforms.Compose([
-            transforms.Resize(self.target_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
-            transforms.RandomRotation(20),
-            transforms.ColorJitter(0.2, 0.2),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-        self.val_transform = transforms.Compose([
-            transforms.Resize(self.target_size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-        self.test_transform = transforms.Compose([
-            transforms.Resize(self.target_size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
+        # Initialize preprocessing pipeline
+        self.preprocessor = Preprocessing(input_size=target_size)
 
     def setup(self, stage=None):
+        """
+        Setup datasets for train, validation, and test phases.
+        Args:
+            stage (str): 'fit', 'test', or 'predict' to determine which datasets to set up.
+        """
+        # Load labels and split into train/validation sets
         labels_df = pd.read_csv(self.labels_file)
-        train_df, val_df = train_test_split(labels_df, test_size=0.2, stratify=labels_df['label'], random_state=42)
-        self.train_dataset = HistologyDataset(train_df, self.img_dir, transform=self.train_transform)
-        self.val_dataset = HistologyDataset(val_df, self.img_dir, transform=self.val_transform)
-        
-        # Initialize the test dataset if stage is "test"
+        train_df, val_df = train_test_split(
+            labels_df, test_size=0.2, stratify=labels_df["label"], random_state=42
+        )
+
+        # Initialize datasets with appropriate transforms
+        self.train_dataset = HistologyDataset(
+            train_df, self.img_dir, self.preprocessor, mode="train"
+        )
+        self.val_dataset = HistologyDataset(
+            val_df, self.img_dir, self.preprocessor, mode="val"
+        )
+
+        # Test dataset setup if stage is 'test'
         if stage == "test":
             test_df = pd.DataFrame({"id": os.listdir(self.test_dir)})
-            self.test_dataset = HistologyDataset(test_df, self.test_dir, transform=self.test_transform)
+            self.test_dataset = HistologyDataset(
+                test_df, self.test_dir, self.preprocessor, mode="test"
+            )
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+        """Return the training DataLoader."""
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+        """Return the validation DataLoader."""
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+        )
 
     def test_dataloader(self):
-        if hasattr(self, 'test_dataset'):
-            return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+        """Return the test DataLoader."""
+        if hasattr(self, "test_dataset"):
+            return DataLoader(
+                self.test_dataset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=4,
+                pin_memory=True,
+            )
         else:
-            print("Test dataset not initialized. Call setup('test') before requesting test_dataloader.")
+            raise ValueError(
+                "Test dataset not initialized. Call setup(stage='test') before requesting test_dataloader."
+            )
+
+
+def display_sample_images(dataset: HistologyDataset, label: int, sample_size: int = 5):
+    """
+    Display original and preprocessed sample images for a specific label.
+    Args:
+        dataset (HistologyDataset): Dataset object to sample images from.
+        label (int): Label to filter for (e.g., 0 or 1).
+        sample_size (int): Number of images to display.
+    """
+    # Filter dataset for the given label
+    label_data = dataset.dataframe[dataset.dataframe["label"] == label].sample(sample_size)
+
+    # Create a plot to show original and preprocessed images side by side
+    plt.figure(figsize=(15, 5))
+    for i, row in enumerate(label_data.iterrows()):
+        idx = row[0]
+        img, preprocessed_img, lbl = dataset[idx]
+
+        # Display original image
+        plt.subplot(2, sample_size, i + 1)
+        plt.imshow(img)
+        plt.title(f"Original - Label {lbl}")
+        plt.axis("off")
+
+        # Display preprocessed image
+        plt.subplot(2, sample_size, i + 1 + sample_size)
+        plt.imshow(preprocessed_img.permute(1, 2, 0).numpy())
+        plt.title(f"Preprocessed - Label {lbl}")
+        plt.axis("off")
+
+    plt.suptitle(f"Samples for Label {label}", fontsize=16)
+    plt.show()
