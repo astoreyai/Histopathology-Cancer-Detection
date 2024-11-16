@@ -3,6 +3,7 @@ import torch  # Add this import
 import torchvision.transforms as T
 from typing import Optional, Tuple
 from PIL import Image
+import staintools  # Add this import
 
 class Preprocessing:
     def __init__(self, 
@@ -65,14 +66,21 @@ class Preprocessing:
         return img
 
     def apply_center_mask(self, img: np.array) -> np.array:
-        """Apply a center mask to the image."""
-        if self.mask_size:
-            h, w = img.shape[:2]
-            center_h, center_w = h // 2, w // 2
-            start_h, start_w = center_h - self.mask_size[0] // 2, center_w - self.mask_size[1] // 2
-            img = img[start_h:start_h + self.mask_size[0], start_w:start_w + self.mask_size[1]]
-        return img
+        """Apply a center mask of size `mask_size` to the image."""
+        h, w = img.shape[:2]
+        mask_h, mask_w = self.mask_size
+        center_h, center_w = h // 2, w // 2
 
+        # Calculate start and end coordinates for the mask
+        start_h = max(center_h - mask_h // 2, 0)
+        start_w = max(center_w - mask_w // 2, 0)
+        end_h = start_h + mask_h
+        end_w = start_w + mask_w
+
+        # Apply the center mask
+        img = img[start_h:end_h, start_w:end_w]
+        return img
+        
     def preprocess_image(self, img: Image.Image, mode: str = "train") -> torch.Tensor:
         """
         Preprocess an image based on the mode (train, validation, or test).
