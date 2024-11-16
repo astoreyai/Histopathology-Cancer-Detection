@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import torch
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from PIL import Image
@@ -34,13 +35,13 @@ class HistologyDataset(Dataset):
     def __getitem__(self, idx):
         row = self.dataframe.iloc[idx]
         img_path = os.path.join(self.img_dir, row["id"] + ".tif")
-        label = row.get("label", -1)  # Default -1 for unlabeled test data
+        label = row["label"] if "label" in row else -1  # Default -1 for unlabeled data
 
-        # Load image and apply preprocessing
-        img = Image.open(img_path)
+        # Load image and preprocess
+        img = Image.open(img_path).convert("RGB")  # Convert to RGB to handle grayscale
         preprocessed_img = self.preprocessor.preprocess_image(img, mode=self.mode)
 
-        return img, preprocessed_img, label
+        return preprocessed_img, torch.tensor(label, dtype=torch.float32)
 
 
 class HistopathologyDataModule(LightningDataModule):
