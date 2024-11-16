@@ -138,16 +138,25 @@ class HistopathologyDataModule(LightningDataModule):
             )
 
 
-def display_sample_images(dataset: HistologyDataset, label: int, sample_size: int = 5):
+def display_sample_images(dataset, label, sample_size=5):
     """
     Display original and preprocessed sample images for a specific label.
+    
     Args:
         dataset (HistologyDataset): Dataset object to sample images from.
         label (int): Label to filter for (e.g., 0 or 1).
         sample_size (int): Number of images to display.
     """
     # Filter dataset for the given label
-    label_data = dataset.dataframe[dataset.dataframe["label"] == label].sample(sample_size)
+    label_data = dataset.dataframe[dataset.dataframe["label"] == label]
+
+    # Ensure sample size doesn't exceed available data
+    actual_sample_size = min(sample_size, len(label_data))
+    if actual_sample_size == 0:
+        print(f"No samples found for label {label}.")
+        return
+
+    label_data = label_data.sample(actual_sample_size)
 
     # Create a plot to show original and preprocessed images side by side
     plt.figure(figsize=(15, 5))
@@ -156,13 +165,13 @@ def display_sample_images(dataset: HistologyDataset, label: int, sample_size: in
         img, preprocessed_img, lbl = dataset[idx]
 
         # Display original image
-        plt.subplot(2, sample_size, i + 1)
+        plt.subplot(2, actual_sample_size, i + 1)
         plt.imshow(img)
         plt.title(f"Original - Label {lbl}")
         plt.axis("off")
 
         # Display preprocessed image
-        plt.subplot(2, sample_size, i + 1 + sample_size)
+        plt.subplot(2, actual_sample_size, i + 1 + actual_sample_size)
         plt.imshow(preprocessed_img.permute(1, 2, 0).numpy())
         plt.title(f"Preprocessed - Label {lbl}")
         plt.axis("off")
