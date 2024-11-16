@@ -12,7 +12,7 @@ torchvision==0.14.1
 pytorch-lightning==2.1.0
 
 # MLflow for experiment tracking
-mlflow==2.4.1
+mlflow==2.1.0
 
 # Image processing
 staintools==3.1.2
