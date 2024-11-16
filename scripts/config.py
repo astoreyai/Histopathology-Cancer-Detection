@@ -7,7 +7,7 @@ LABELS_FILE = "/kaggle/input/histopathologic-cancer-detection/train_labels.csv"
 
 # Model and training configurations
 TARGET_SIZE = (96, 96)
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 LEARNING_RATE = 0.00007
 EPOCHS = 5
 NUM_CLASSES = 2
