@@ -98,7 +98,7 @@ class HistopathologyDataModule(LightningDataModule):
 
         # Test dataset setup if stage is 'test'
         if stage == "test":
-            test_df = pd.DataFrame({"id": os.listdir(self.test_dir)})
+            test_df = pd.DataFrame({"id": [os.path.splitext(f)[0] for f in os.listdir(self.test_dir)]})
             self.test_dataset = HistologyDataset(
                 test_df, self.test_dir, self.preprocessor, mode="test"
             )
