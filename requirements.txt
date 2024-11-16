@@ -8,5 +8,5 @@ torch==1.13.1
 torchvision==0.14.1
 pytorch-lightning==2.1.0
 mlflow==2.1.0
-https://raw.githubusercontent.com/astoreyai/Histopathology_Cancer_Detection/main/dependency/spams-2.6.5.4-cp37-cp37m-linux_x86_64.whl
-staintools==2.1.2
+scikit-image==0.21.0
+tqdm==4.65.0

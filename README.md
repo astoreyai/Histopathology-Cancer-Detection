@@ -1,83 +1,183 @@
 # Histopathology Cancer Detection Project
 
-This repository contains code and resources for developing a deep learning model to detect cancer in histopathology images. The project includes scripts for data preprocessing, model training, validation, and testing, with an emphasis on reproducibility and experiment tracking through MLflow.
+This repository contains code, scripts, and resources for detecting cancer in histopathology images using deep learning. The project is structured to support reproducible experiments with MLflow tracking and modular scripts for data preprocessing, model training, validation, and testing.
+
+---
 
 ## Project Overview
 
-The project is structured to support iterative improvements in preprocessing, modeling, and hyperparameter optimization. MLflow is used to log metrics, parameters, and artifacts for easy comparison and versioning across experiments, enhancing the reproducibility and reliability of results.
+Histopathology image analysis plays a vital role in cancer detection. This project aims to automate the detection process using convolutional neural networks (CNNs) trained on histopathological image datasets. Key features include:
+
+- **Preprocessing Pipelines**: Scalable preprocessing, including resizing, augmentation, and normalization.
+- **Experiment Tracking**: MLflow integration for logging metrics, parameters, and artifacts.
+- **Model Training**: PyTorch Lightning for modular, scalable training workflows.
+- **Submission-Ready Predictions**: Easy-to-generate Kaggle submission files.
+
+---
 
 ## Project Structure
 
 ```plaintext
-├── data/                             # Placeholder for data (loaded from Kaggle or other sources)
-├── notebooks/
-│   ├── as_hcd_eda.ipynb              # EDA notebook utilizing Sweetviz for dataset analysis
-│   ├── as_hcd_training.ipynb         # Training notebook with MLflow tracking
-│   └── as_hcd_testing.ipynb          # Testing and submission notebook
-├── scripts/
-│   ├── data_utils.py                 # Dataset classes and transformations
-│   ├── model_utils.py                # Model definitions and utilities
-│   └── train_utils.py                # Training and evaluation utilities
-├── README.md                         # Project documentation
-├── LICENSE                           # License for the project
-└── requirements.txt                  # Project dependencies
+├── data/                             # Placeholder for raw and processed datasets
+├── mlruns/                           # MLflow tracking directory for experiment logs and artifacts
+├── experiments/                      # Directory to store outputs and visualizations from experiments
+├── scripts/                          # Modular scripts for the project
+│   ├── __init__.py                   # Initializes project modules
+│   ├── config.py                     # Configuration settings (paths, hyperparameters, etc.)
+│   ├── data_utils.py                 # Dataset classes and preprocessing utilities
+│   ├── eda.py                        # EDA script for dataset exploration
+│   ├── model_utils.py                # Model utilities (metrics, saving/loading models)
+│   ├── models.py                     # Modular implementation of model architectures
+│   ├── preprocessing.py              # Preprocessing pipeline for image transformations
+│   ├── testing_submission.py         # Generate predictions and create submission files
+│   ├── train_histopathology.py       # Train the model with PyTorch Lightning
+├── requirements.txt                  # Project dependencies
+├── README.md                         # Main project documentation
+├── LICENSE                           # License information
+├── train_labels.csv                  # CSV containing training labels
 ```
 
-## Installation
+---
 
-Clone this repository and install the required packages:
+## Getting Started
+
+### Prerequisites
+
+Ensure you have Python 3.8+ installed, along with `pip`. Install the required dependencies using:
 
 ```bash
-git clone https://github.com/yourusername/histopathology-cancer-detection.git
-cd histopathology-cancer-detection
 pip install -r requirements.txt
 ```
 
-## Workflow with MLflow
+### Installation
 
-MLflow is integrated for experiment tracking, allowing systematic comparison of model configurations and performance across runs.
+Clone this repository and set up the environment:
 
-1. **MLflow Setup**:
-   - Optionally, set up an MLflow Tracking Server for centralized logging and configure the tracking URI in notebooks or scripts.
-   - Run MLflow locally for individual tracking:
+```bash
+git clone https://github.com/astoreyai/Histopathology_Cancer_Detection.git
+cd Histopathology_Cancer_Detection
+pip install -r requirements.txt
+```
 
-     ```bash
-     mlflow ui
-     ```
+### Dataset
 
-   This command launches the MLflow UI at `localhost:5000`.
+Place your dataset in the `data/` directory. Update `config.py` with the correct dataset paths.
 
-2. **Logging Experiments**:
-   - **Metrics**: Logs training/validation losses, accuracy, and AUC scores at each epoch.
-   - **Parameters**: Captures model parameters (learning rate, batch size, etc.) for reproducibility.
-   - **Artifacts**: Saves trained model weights, configuration files, and experiment outputs.
+---
 
-3. **Experiment Management**:
-   - The `as_hcd_training.ipynb` notebook logs each experiment with `mlflow.log_metric` and `mlflow.log_param`.
-   - Use the MLflow UI to compare runs and evaluate the best configurations based on metrics and visualized graphs.
-
-## Usage
+## Workflow
 
 ### Exploratory Data Analysis (EDA)
 
-Use `as_hcd_eda.ipynb` to conduct an initial analysis of the dataset:
-   - **Data Overview**: Generates a detailed report with Sweetviz, including distribution analysis and image property statistics.
-   - **Insights**: Visualizes key metrics, informing preprocessing steps and model selection.
+Run `eda.py` or the notebook `as_hcd_eda.ipynb` to explore the dataset. The script generates:
 
-### Model Training
+- Class distribution plots
+- Summary statistics
+- Sweetviz reports for detailed insights
 
-The `as_hcd_training.ipynb` notebook handles data loading, preprocessing, model initialization, and training. Configuration options for paths, learning rate, batch size, and other parameters are modifiable within the notebook.
+```bash
+python scripts/eda.py
+```
 
-1. **Data Loading**: `data_utils.py` manages data preprocessing and transformations.
-2. **Model Definition**: `model_utils.py` defines the CNN architecture, saving/loading methods, and device placement.
-3. **Training**: `train_utils.py` includes functions for training, validation, and metric calculations, with MLflow logging integrated for each step.
+### Training the Model
 
-### Model Testing and Submission
+Train the CNN using `train_histopathology.py`. The script handles data loading, training, validation, and logging to MLflow.
 
-The `as_hcd_testing.ipynb` notebook tests the trained model on the test dataset, generating predictions. Results are saved in `submission.csv` for easy Kaggle submission.
+```bash
+python scripts/train_histopathology.py
+```
 
-### Project Modules
+Key features:
+- Automatically saves the best model checkpoint.
+- Logs metrics, parameters, and artifacts for each experiment.
+- Supports GPU acceleration and distributed training.
 
-- **data_utils.py**: Defines dataset classes and transformations for image augmentation and processing.
-- **model_utils.py**: Contains CNN model architecture, initialization, and saving/loading functions.
-- **train_utils.py**: Implements functions for training, validation, and generating predictions, with integrated MLflow logging.
+### Testing and Submissions
+
+Generate predictions for the test dataset using `testing_submission.py`:
+
+```bash
+python scripts/testing_submission.py
+```
+
+This script saves predictions to `submission.csv` for easy Kaggle submissions.
+
+---
+
+## Key Components
+
+### Scripts
+
+#### `data_utils.py`
+- Defines `HistologyDataset` and `HistopathologyDataModule`.
+- Handles dataset splitting, augmentations, and batch preparation.
+
+#### `preprocessing.py`
+- Provides a robust preprocessing pipeline for image resizing, normalization, and augmentations.
+
+#### `models.py`
+- Implements modular CNN architectures for flexibility in experimentation.
+
+#### `model_utils.py`
+- Contains utility functions for training, evaluation, and logging.
+
+#### `eda.py`
+- Script for dataset analysis, visualization, and generating Sweetviz reports.
+
+#### `train_histopathology.py`
+- Manages the model training pipeline with PyTorch Lightning and MLflow integration.
+
+#### `testing_submission.py`
+- Script for loading the trained model, generating predictions, and creating submission files.
+
+---
+
+## Experiment Tracking with MLflow
+
+### Setting Up MLflow
+
+To launch the MLflow UI locally, run:
+
+```bash
+mlflow ui
+```
+
+Access the UI at `http://localhost:5000`.
+
+### Logging
+
+During training, the following are logged:
+- **Metrics**: AUC, accuracy, loss
+- **Parameters**: Learning rate, batch size, model configuration
+- **Artifacts**: Checkpoints, visualizations, and predictions
+
+---
+
+## Dependencies
+
+See `requirements.txt` for all dependencies. Major libraries include:
+
+- PyTorch
+- PyTorch Lightning
+- Matplotlib
+- Seaborn
+- Pandas
+- MLflow
+
+---
+
+## Contribution Guidelines
+
+Contributions are welcome! Feel free to fork this repository and create pull requests.
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
+
+---
+
+## Acknowledgments
+
+Special thanks to the Kaggle community for datasets and inspiration. This project was built with a focus on modularity, reproducibility, and scalability.

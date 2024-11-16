@@ -12,8 +12,8 @@ from scripts.config import TRAIN_DIR, TEST_DIR, LABELS_FILE, BATCH_SIZE, TARGET_
 
 class HistologyDataset(Dataset):
     """
-    Custom dataset class for histopathology images, supporting stain normalization,
-    center masking, and dynamic transforms.
+    Custom dataset class for histopathology images, supporting preprocessing
+    and dynamic transforms.
     """
 
     def __init__(self, dataframe, img_dir, preprocess_pipeline, mode: str):
@@ -34,11 +34,11 @@ class HistologyDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.dataframe.iloc[idx]
-        img_path = os.path.join(self.img_dir, row["id"] + ".tif")
+        img_path = os.path.join(self.img_dir, f"{row['id']}.tif")
         label = row["label"] if "label" in row else -1  # Default -1 for unlabeled data
 
         # Load image and preprocess
-        img = Image.open(img_path).convert("RGB")  # Convert to RGB to handle grayscale
+        img = Image.open(img_path).convert("RGB")  # Convert to RGB
         preprocessed_img = self.preprocessor.preprocess_image(img, mode=self.mode)
 
         return preprocessed_img, torch.tensor(label, dtype=torch.float32)
@@ -47,7 +47,7 @@ class HistologyDataset(Dataset):
 class HistopathologyDataModule(LightningDataModule):
     """
     PyTorch Lightning DataModule for managing train, validation, and test datasets
-    with dynamic preprocessing, stain normalization, and transforms.
+    with dynamic preprocessing and transforms.
     """
 
     def __init__(
@@ -88,7 +88,7 @@ class HistopathologyDataModule(LightningDataModule):
             labels_df, test_size=0.2, stratify=labels_df["label"], random_state=42
         )
 
-        # Initialize datasets with appropriate transforms
+        # Initialize datasets
         self.train_dataset = HistologyDataset(
             train_df, self.img_dir, self.preprocessor, mode="train"
         )
@@ -96,9 +96,10 @@ class HistopathologyDataModule(LightningDataModule):
             val_df, self.img_dir, self.preprocessor, mode="val"
         )
 
-        # Test dataset setup if stage is 'test'
+        # Test dataset setup
         if stage == "test":
-            test_df = pd.DataFrame({"id": [os.path.splitext(f)[0] for f in os.listdir(self.test_dir)]})
+            test_files = [os.path.splitext(f)[0] for f in os.listdir(self.test_dir) if f.endswith(".tif")]
+            test_df = pd.DataFrame({"id": test_files})
             self.test_dataset = HistologyDataset(
                 test_df, self.test_dir, self.preprocessor, mode="test"
             )
@@ -142,7 +143,7 @@ class HistopathologyDataModule(LightningDataModule):
 def display_sample_images(dataset, label, sample_size=5):
     """
     Display original and preprocessed sample images for a specific label.
-    
+
     Args:
         dataset (HistologyDataset): Dataset object to sample images from.
         label (int): Label to filter for (e.g., 0 or 1).
@@ -159,22 +160,16 @@ def display_sample_images(dataset, label, sample_size=5):
 
     label_data = label_data.sample(actual_sample_size)
 
-    # Create a plot to show original and preprocessed images side by side
+    # Create a plot to show original and preprocessed images
     plt.figure(figsize=(15, 5))
-    for i, row in enumerate(label_data.iterrows()):
-        idx = row[0]
-        img, preprocessed_img, lbl = dataset[idx]
-
-        # Display original image
-        plt.subplot(2, actual_sample_size, i + 1)
-        plt.imshow(img)
-        plt.title(f"Original - Label {lbl}")
-        plt.axis("off")
+    for i, (_, row) in enumerate(label_data.iterrows()):
+        idx = dataset.dataframe.index.get_loc(row.name)
+        preprocessed_img, lbl = dataset[idx]
 
         # Display preprocessed image
-        plt.subplot(2, actual_sample_size, i + 1 + actual_sample_size)
+        plt.subplot(1, actual_sample_size, i + 1)
         plt.imshow(preprocessed_img.permute(1, 2, 0).numpy())
-        plt.title(f"Preprocessed - Label {lbl}")
+        plt.title(f"Label: {int(lbl.item())}")
         plt.axis("off")
 
     plt.suptitle(f"Samples for Label {label}", fontsize=16)

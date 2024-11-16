@@ -26,6 +26,7 @@ from .model_utils import BaselineCNN
 
 from .preprocessing import Preprocessing
 
+# Define accessible components in the module
 __all__ = [
     # Config exports
     "TRAIN_DIR",
@@ -44,3 +45,8 @@ __all__ = [
     # Preprocessing pipeline
     "Preprocessing",
 ]
+
+# Notes:
+# - `Preprocessing`: Handles image resizing, augmentations, and normalization.
+# - Ensure that all components listed in `__all__` are correctly imported and functional.
+# - For additional utilities, consider creating submodules to maintain modularity.

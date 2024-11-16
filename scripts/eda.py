@@ -21,10 +21,6 @@ def run_eda():
     # Initialize preprocessing pipeline
     preprocessor = Preprocessing(
         input_size=TARGET_SIZE,
-        stain_correction=True,
-        stain_method="macenko",
-        mask_size=(32, 32),
-        stain_reference_image_path="path/to/reference_image.tif"
     )
 
     # Display basic information

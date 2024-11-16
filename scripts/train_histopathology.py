@@ -1,10 +1,10 @@
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import MLFlowLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from scripts.data_utils import HistopathologyDataModule
 from scripts.model_utils import BaselineCNN
-from scripts.config import BATCH_SIZE, LEARNING_RATE, EPOCHS
+from scripts.config import BATCH_SIZE, LEARNING_RATE, EPOCHS, TARGET_SIZE
 
 def train_model():
     """
@@ -20,33 +20,38 @@ def train_model():
     )
 
     # Initialize DataModule
-    data_module = HistopathologyDataModule()
+    data_module = HistopathologyDataModule(
+        batch_size=BATCH_SIZE,
+        target_size=TARGET_SIZE
+    )
 
     # Initialize model
-    model = BaselineCNN(input_size=data_module.target_size, learning_rate=LEARNING_RATE)
+    model = BaselineCNN(input_shape=(3, *TARGET_SIZE), learning_rate=LEARNING_RATE)
 
     # Define callbacks
     checkpoint_callback = ModelCheckpoint(
         monitor="val_loss",
         dirpath="checkpoints/",
-        filename="best_model",
+        filename="best_model-{epoch:02d}-{val_loss:.4f}",
         save_top_k=1,
         mode="min"
     )
     early_stopping = EarlyStopping(
         monitor="val_loss",
-        patience=3,
+        patience=5,
         mode="min"
     )
+    lr_monitor = LearningRateMonitor(logging_interval="epoch")
 
     # Initialize trainer
     trainer = pl.Trainer(
         max_epochs=EPOCHS,
         logger=mlflow_logger,
-        accelerator="gpu",
-        devices=2 if torch.cuda.is_available() else 1,
-        strategy="ddp_notebook",
-        callbacks=[checkpoint_callback, early_stopping]
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        devices=torch.cuda.device_count() if torch.cuda.is_available() else 1,
+        strategy="ddp_notebook" if torch.cuda.device_count() > 1 else None,
+        callbacks=[checkpoint_callback, early_stopping, lr_monitor],
+        log_every_n_steps=50,
     )
 
     # Train the model

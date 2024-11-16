@@ -18,7 +18,7 @@ class BaselineCNN(pl.LightningModule):
             num_classes (int): Number of output classes (default 1 for binary classification).
             learning_rate (float): Learning rate for the optimizer.
         """
-        super(BaselineCNN, self).__init__()
+        super().__init__()
         self.save_hyperparameters()
         self.learning_rate = learning_rate
         self.num_classes = num_classes
@@ -52,67 +52,58 @@ class BaselineCNN(pl.LightningModule):
         # Metrics
         self.train_auc = torchmetrics.AUROC(task="binary")
         self.val_auc = torchmetrics.AUROC(task="binary")
+        self.test_auc = torchmetrics.AUROC(task="binary")
 
     def forward(self, x):
         x = self.conv_layers(x)
         x = self.fc_layers(x)
         return x
 
-    def training_step(self, batch, batch_idx):
+    def step(self, batch, stage: str):
+        """
+        Shared step logic for training, validation, and testing.
+        """
         images, labels = batch
         logits = self(images).squeeze()
         loss = self.criterion(logits, labels.float())
-
-        # Calculate metrics
         preds = torch.sigmoid(logits)
-        self.train_auc.update(preds, labels.int())
+        
+        if stage == "train":
+            self.train_auc.update(preds, labels.int())
+        elif stage == "val":
+            self.val_auc.update(preds, labels.int())
+        elif stage == "test":
+            self.test_auc.update(preds, labels.int())
 
-        # Log metrics
+        return loss, preds
+
+    def training_step(self, batch, batch_idx):
+        loss, preds = self.step(batch, stage="train")
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log("train_auc", self.train_auc, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        images, labels = batch
-        logits = self(images).squeeze()
-        loss = self.criterion(logits, labels.float())
-
-        # Calculate metrics
-        preds = torch.sigmoid(logits)
-        self.val_auc.update(preds, labels.int())
-
-        # Log metrics
+        loss, preds = self.step(batch, stage="val")
         self.log("val_loss", loss, prog_bar=True)
         self.log("val_auc", self.val_auc, prog_bar=True)
         return loss
 
     def test_step(self, batch, batch_idx):
-        images, labels = batch
-        logits = self(images).squeeze()
-
-        # Calculate metrics
-        preds = torch.sigmoid(logits)
-        auc_score = self.val_auc(preds, labels.int())
-
-        # Log metrics
-        self.log("test_auc", auc_score)
-        return {"test_auc": auc_score}
+        loss, preds = self.step(batch, stage="test")
+        self.log("test_loss", loss, prog_bar=True)
+        self.log("test_auc", self.test_auc, prog_bar=True)
+        return loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=2, factor=0.5)
         return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
 
-    def predict_step(self, batch, batch_idx):
-        images = batch[0]  # Test datasets might not include labels or IDs
-        logits = self(images).squeeze()
-        preds = (torch.sigmoid(logits) > 0.5).float()
-        return preds
-
     @staticmethod
     def generate_predictions(model, dataloader, output_path="submission.csv"):
         """
-        Generates predictions on a test DataLoader and saves them in CSV format for Kaggle submission.
+        Generates predictions on a test DataLoader and saves them in CSV format.
         """
         model.eval()
         predictions = []

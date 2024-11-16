@@ -1,83 +1,181 @@
 # Histopathology Cancer Detection
 
-This repository provides the code for detecting cancerous cells in histopathology images using a Convolutional Neural Network (CNN). It includes custom dataset loading, model definition, training, validation, and prediction utilities tailored for binary image classification of histopathology slides.
+This repository provides a modular and reproducible framework for detecting cancerous cells in histopathology images using Convolutional Neural Networks (CNNs). It includes custom dataset loading, preprocessing, model training, validation, and prediction utilities, tailored for binary classification tasks in histopathology image analysis.
+
+---
 
 ## Project Structure
 
-- **data_utils.py**: Contains utility functions and dataset classes for loading, processing, and visualizing histopathology images.
-- **model_utils.py**: Defines the CNN model architecture for binary classification tasks, along with functions for initializing, saving, and loading model states.
-- **train_utils.py**: Provides training, validation, and prediction utilities for model training and evaluation.
-- **config.py**: Configuration file specifying dataset paths, target image size, batch size, learning rate, and the number of training epochs.
+```plaintext
+├── data/                             # Placeholder for data (loaded from Kaggle or other sources)
+├── mlruns/                           # Directory for MLflow experiment tracking
+├── experiments/                      # Directory for experiment outputs and visualizations
+├── scripts/                          # Core scripts for project implementation
+│   ├── __init__.py                   # Initializes project modules
+│   ├── config.py                     # Configuration file with dataset paths and hyperparameters
+│   ├── data_utils.py                 # Dataset classes and utility functions
+│   ├── eda.py                        # EDA script for dataset analysis and visualization
+│   ├── model_utils.py                # Model utilities for saving/loading/checkpoints
+│   ├── models.py                     # Modular implementation of CNN architectures
+│   ├── preprocessing.py              # Image preprocessing pipeline
+│   ├── testing_submission.py         # Generates predictions and submission files
+│   ├── train_histopathology.py       # Main script for training the model
+├── requirements.txt                  # Project dependencies
+├── README.md                         # Main project documentation
+├── LICENSE                           # License for the project
+└── train_labels.csv                  # CSV file containing training labels
+```
+
+---
 
 ## Files Overview
 
-### data_utils.py
+### `data_utils.py`
 - **Functions**:
-  - `load_labels`: Loads the labels CSV file for training images.
-  - `get_transformations`: Defines transformations for image augmentation (e.g., resizing, horizontal flipping, normalization).
-  - `display_sample_images`: Displays sample images for a given label (cancerous/non-cancerous) for visual inspection.
-  - `calculate_mean_intensity`: Calculates pixel intensity distributions for sample images, aiding in dataset analysis.
-  
+  - `display_sample_images`: Visualize sample images for specific labels.
+  - `calculate_class_distribution`: Analyze and visualize dataset label distribution.
+
 - **Classes**:
-  - `HistologyDataset`: Custom dataset for training/validation images, with transformations.
-  - `HistologyTestDataset`: Custom dataset for test images, preparing them for prediction without labels.
+  - `HistologyDataset`: Custom PyTorch dataset for loading and preprocessing histopathology images.
+  - `HistopathologyDataModule`: Data module for managing training, validation, and test data with PyTorch Lightning.
 
-### model_utils.py
+---
+
+### `eda.py`
+- **Purpose**:
+  - Conducts exploratory data analysis (EDA) using visualizations and statistics.
+  - Generates a Sweetviz report for detailed insights into the dataset.
+
+- **Features**:
+  - Class distribution analysis.
+  - Summary statistics and data insights.
+  - Visual sampling of image labels.
+
+---
+
+### `models.py`
 - **Classes**:
-  - `BaselineCNN`: A CNN model for binary classification. Includes convolutional layers for feature extraction and fully connected layers for classification.
-  
-- **Functions**:
-  - `initialize_model`: Initializes and moves the model to the specified device (CPU/GPU).
-  - `save_model`: Saves the model's state dictionary to a specified path.
-  - `load_model`: Loads a saved model's state dictionary onto the specified device.
+  - `BaselineCNN`: A CNN architecture for binary classification, featuring convolutional layers for feature extraction and fully connected layers for classification.
 
-### train_utils.py
-- **Functions**:
-  - `train_one_epoch`: Trains the model for one epoch, updating weights and calculating training loss.
-  - `validate`: Evaluates the model on validation data, calculating loss and AUC score.
-  - `generate_predictions`: Generates predictions for test data, applying a threshold for binary classification.
+---
 
-### config.py
-- Specifies configuration details:
-  - Paths to training/test image directories and labels file.
-  - Image target size, batch size, learning rate, and training epochs.
+### `model_utils.py`
+- **Functions**:
+  - `save_model`: Saves the trained model checkpoint.
+  - `load_model`: Loads a model checkpoint for inference or fine-tuning.
+
+---
+
+### `preprocessing.py`
+- **Purpose**:
+  - Preprocesses images through resizing, normalization, and augmentations.
+  - Provides modular transformations for train, validation, and test datasets.
+
+---
+
+### `train_histopathology.py`
+- **Purpose**:
+  - Main script for training the CNN model.
+  - Includes MLflow logging, early stopping, and checkpointing.
+
+- **Features**:
+  - GPU/CPU support.
+  - Logging metrics and parameters to MLflow.
+  - Automated saving of the best model.
+
+---
+
+### `testing_submission.py`
+- **Purpose**:
+  - Generates predictions using the trained model.
+  - Saves predictions to `submission.csv` for Kaggle submissions.
+
+---
 
 ## Getting Started
 
-### Requirements
-- Python 3.x
-- PyTorch
-- pandas
-- scikit-learn
-- tqdm
-- torchvision
-- PIL (Pillow)
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/astoreyai/Histopathology_Cancer_Detection.git
+   cd Histopathology_Cancer_Detection
+   ```
 
-Install dependencies using:
-```bash
-pip install torch pandas scikit-learn tqdm torchvision pillow
-```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+---
 
 ### Usage
 
-1. **Dataset Preparation**:
-   - Organize histopathology images and labels according to paths specified in `config.py`.
-  
-2. **Training the Model**:
-   - Run the training script, which loads images, trains the CNN model, and validates it on a separate dataset.
+#### **Exploratory Data Analysis**
+Run `eda.py` to analyze the dataset:
+```bash
+python scripts/eda.py
+```
 
-3. **Generating Predictions**:
-   - Use the `generate_predictions` function in `train_utils.py` to make predictions on new images.
+#### **Training**
+Train the CNN model:
+```bash
+python scripts/train_histopathology.py
+```
 
-### Example Workflow
-1. Load dataset labels and apply transformations.
-2. Initialize the CNN model and set hyperparameters.
-3. Train and validate the model, saving checkpoints periodically.
-4. Evaluate model performance using AUC and loss metrics.
+#### **Prediction**
+Generate predictions for the test dataset:
+```bash
+python scripts/testing_submission.py
+```
+
+---
 
 ## Configuration
-Modify the paths and parameters in `config.py` as necessary to adapt the code to different datasets or settings.
+
+Modify `config.py` to update:
+- Paths to training and test datasets.
+- Image preprocessing parameters (target size, normalization values).
+- Hyperparameters (learning rate, batch size, number of epochs).
+
+---
+
+## Experiment Tracking with MLflow
+
+MLflow is integrated to log metrics, parameters, and artifacts during training. Launch the MLflow UI with:
+```bash
+mlflow ui
+```
+Access the UI at `http://localhost:5000`.
+
+---
+
+## Key Features
+1. **Preprocessing Pipeline**:
+   - Resizing, normalization, and augmentation.
+   - Modular implementation for train, validation, and test splits.
+
+2. **Reproducibility**:
+   - Configurable scripts and parameter tracking.
+   - MLflow integration for experiment comparison.
+
+3. **Scalability**:
+   - Modularized model definitions and utilities.
+   - PyTorch Lightning integration for efficient training.
+
+---
+
+## Requirements
+
+- Python 3.8+
+- PyTorch
+- PyTorch Lightning
+- Pandas
+- Matplotlib
+- Seaborn
+- Sweetviz
+
+---
 
 ## License
-MIT License.
 
+This project is licensed under the MIT License. See the `LICENSE` file for details.
