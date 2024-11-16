@@ -43,13 +43,12 @@ def train_model():
     )
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
 
-    # Initialize trainer
+    # Initialize trainer (removing parallelization)
     trainer = pl.Trainer(
         max_epochs=EPOCHS,
         logger=mlflow_logger,
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        devices=torch.cuda.device_count() if torch.cuda.is_available() else 1,
-        strategy="ddp_notebook" if torch.cuda.device_count() > 1 else None,
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",  # Use GPU if available
+        devices=1,  # Only one device (CPU or GPU)
         callbacks=[checkpoint_callback, early_stopping, lr_monitor],
         log_every_n_steps=50,
     )
