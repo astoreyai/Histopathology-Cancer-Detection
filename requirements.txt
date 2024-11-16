@@ -15,7 +15,7 @@ pytorch-lightning==2.1.0
 mlflow==2.1.0
 
 # Image processing
-staintools==2.1.0
+staintools==2.1.0 --no-deps  # For stain normalization
 spams-bin==2.6.5  # For advanced matrix computations in stain normalization
 scipy==1.10.1
 
