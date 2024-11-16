@@ -1,7 +1,7 @@
 import numpy as np
-import staintools
-from typing import Optional, Tuple
+import torch  # Add this import
 import torchvision.transforms as T
+from typing import Optional, Tuple
 from PIL import Image
 
 class Preprocessing:
